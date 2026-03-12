@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import re
 import time
+import unicodedata
+from datetime import datetime
 from threading import Lock
 from typing import Any
 from urllib.parse import urlparse
@@ -34,6 +36,20 @@ def _cache_valid(expires_at: float) -> bool:
 
 def _normalize_text(value: Any) -> str:
     return re.sub(r"\s+", " ", str(value or "")).strip()
+
+
+def _normalize_search_text(value: Any) -> str:
+    normalized = _normalize_text(value).casefold()
+    if not normalized:
+        return ""
+    normalized = unicodedata.normalize("NFD", normalized)
+    normalized = "".join(char for char in normalized if unicodedata.category(char) != "Mn")
+    normalized = re.sub(r"[^\w]+", " ", normalized, flags=re.UNICODE)
+    return re.sub(r"\s+", " ", normalized).strip()
+
+
+def _tokenize_search_text(value: str) -> list[str]:
+    return [token for token in value.split(" ") if token]
 
 
 def _sanitize_path_component(value: Any, *, fallback: str = "_") -> str:
@@ -79,6 +95,21 @@ def _request_json(url: str) -> dict[str, Any]:
     return payload
 
 
+def _dedupe_catalog_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    deduped: list[dict[str, Any]] = []
+    seen_ids: set[int] = set()
+    for item in items:
+        try:
+            manga_id = int(item["manga_id"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if manga_id in seen_ids:
+            continue
+        seen_ids.add(manga_id)
+        deduped.append(item)
+    return deduped
+
+
 def _get_catalog() -> tuple[list[dict[str, Any]], dict[int, dict[str, Any]]]:
     with _CACHE_LOCK:
         if (
@@ -93,7 +124,7 @@ def _get_catalog() -> tuple[list[dict[str, Any]], dict[int, dict[str, Any]]]:
     if not isinstance(items, list):
         raise MDScrapperProviderError("O catálogo do Manhastro veio em formato inválido.")
 
-    normalized_items = [item for item in items if isinstance(item, dict)]
+    normalized_items = _dedupe_catalog_items([item for item in items if isinstance(item, dict)])
     by_id = {
         int(item["manga_id"]): item
         for item in normalized_items
@@ -158,35 +189,119 @@ def _normalize_project_item(item: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _coerce_float(value: Any) -> float:
+    try:
+        return float(str(value).replace(",", "."))
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _parse_datetime_score(value: Any) -> float:
+    normalized = _normalize_text(value)
+    if not normalized:
+        return 0.0
+    try:
+        return datetime.fromisoformat(normalized).timestamp()
+    except ValueError:
+        return 0.0
+
+
+def _best_field_match_score(value: str, query: str, query_tokens: list[str]) -> tuple[int, int, int, int] | None:
+    if not value:
+        return None
+
+    if value == query:
+        return (0, 0, 0, 0)
+
+    if query and value.startswith(query):
+        return (1, 0, len(value), 0)
+
+    if query_tokens:
+        token_hits = sum(1 for token in query_tokens if token in value)
+        if token_hits == len(query_tokens):
+            earliest_token_pos = min(value.find(token) for token in query_tokens)
+            starts_with_tokens = sum(1 for token in query_tokens if value.startswith(token))
+            return (2, earliest_token_pos, len(value), -starts_with_tokens)
+
+        if query and query in value:
+            return (3, value.find(query), len(value), -token_hits)
+
+        if token_hits > 0:
+            return (4, -token_hits, len(value), 0)
+        return None
+
+    if query and query in value:
+        return (3, value.find(query), len(value), 0)
+
+    return None
+
+
+def _search_project_score(item: dict[str, Any], query: str, query_tokens: list[str]) -> tuple[Any, ...] | None:
+    manga_id = str(item.get("manga_id") or "").strip()
+    if manga_id and manga_id == query:
+        return (-1, 0, 0, 0, 0, 0.0, 0.0, 0.0, "")
+
+    title_fields = [
+        _normalize_search_text(item.get("titulo_brasil")),
+        _normalize_search_text(item.get("titulo")),
+    ]
+    aux_fields = [
+        _normalize_search_text(item.get("descricao_brasil")),
+        _normalize_search_text(item.get("descricao")),
+        _normalize_search_text(item.get("scan_atual")),
+        _normalize_search_text(item.get("generos")),
+    ]
+
+    title_scores = [
+        score
+        for score in (_best_field_match_score(value, query, query_tokens) for value in title_fields)
+        if score is not None
+    ]
+    aux_scores = [
+        score
+        for score in (_best_field_match_score(value, query, query_tokens) for value in aux_fields)
+        if score is not None
+    ]
+
+    if title_scores:
+        match_scope = 0
+        match_score = min(title_scores)
+    elif aux_scores:
+        match_scope = 1
+        match_score = min(aux_scores)
+    else:
+        return None
+
+    popularity = _coerce_float(item.get("views_mes") or item.get("views"))
+    latest_update = _parse_datetime_score(item.get("ultimo_capitulo"))
+    chapter_count = _coerce_float(item.get("qnt_capitulo"))
+    normalized_title = _normalize_search_text(item.get("titulo_brasil") or item.get("titulo") or manga_id)
+
+    return (
+        match_scope,
+        *match_score,
+        -popularity,
+        -latest_update,
+        -chapter_count,
+        normalized_title,
+    )
+
+
 def search_manhastro_projects(query: str, *, limit: int = 24) -> list[dict[str, Any]]:
-    normalized_query = _normalize_text(query).casefold()
+    normalized_query = _normalize_search_text(query)
     if not normalized_query:
         return []
 
+    query_tokens = _tokenize_search_text(normalized_query)
     catalog, _ = _get_catalog()
-    matches: list[tuple[int, dict[str, Any]]] = []
+    matches: list[tuple[tuple[Any, ...], dict[str, Any]]] = []
     for item in catalog:
-        searchable_values = [
-            _normalize_text(item.get("titulo_brasil")),
-            _normalize_text(item.get("titulo")),
-        ]
-        haystack = " | ".join(value.casefold() for value in searchable_values if value)
-        if normalized_query not in haystack:
+        score = _search_project_score(item, normalized_query, query_tokens)
+        if score is None:
             continue
+        matches.append((score, _normalize_project_item(item)))
 
-        rank = 3
-        for value in searchable_values:
-            candidate = value.casefold()
-            if candidate == normalized_query:
-                rank = 0
-                break
-            if candidate.startswith(normalized_query):
-                rank = min(rank, 1)
-            elif normalized_query in candidate:
-                rank = min(rank, 2)
-        matches.append((rank, _normalize_project_item(item)))
-
-    matches.sort(key=lambda item: (item[0], item[1]["title"].casefold()))
+    matches.sort(key=lambda item: item[0])
     return [item for _, item in matches[: max(1, min(limit, 100))]]
 
 
