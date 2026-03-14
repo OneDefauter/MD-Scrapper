@@ -1,3 +1,11 @@
+from .Providers.geass_comics.core import (
+    GEASS_COMICS_PROVIDER_KEY,
+    fetch_geass_chapter_manifest,
+    get_geass_project,
+    get_geass_project_by_url,
+    is_geass_comics_url,
+    search_geass_projects,
+)
 from .Providers.hanami.core import (
     HANAMI_PROVIDER_KEY,
     build_hanami_chapter_list_url,
@@ -33,12 +41,16 @@ from .settings import (
 )
 
 __all__ = [
+    "GEASS_COMICS_PROVIDER_KEY",
     "HANAMI_PROVIDER_KEY",
     "MANHASTRO_PROVIDER_KEY",
     "ScraperProviderDefinition",
     "build_hanami_chapter_list_url",
+    "fetch_geass_chapter_manifest",
     "fetch_hanami_chapter_manifest",
     "fetch_manhastro_chapter_manifest",
+    "get_geass_project",
+    "get_geass_project_by_url",
     "get_provider_settings",
     "get_scraper_provider_chapters_concurrent",
     "get_scraper_provider_chapters_concurrent_map",
@@ -52,11 +64,13 @@ __all__ = [
     "get_scraper_provider_compatibility",
     "get_scraper_worker_chapters_concurrent",
     "get_scraper_worker_max_retries",
+    "is_geass_comics_url",
     "is_hanami_url",
     "is_manhastro_url",
     "list_scraper_providers",
     "resolve_scraper_provider_from_url",
     "run_scraper_download_job",
+    "search_geass_projects",
     "search_hanami_projects",
     "search_manhastro_projects",
 ]

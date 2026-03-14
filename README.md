@@ -21,6 +21,11 @@ app/Services/MD_Scrapper/
 |-- runner.py
 |-- settings.py
 `-- Providers/
+    |-- geass_comics/
+    |   |-- __version__.py
+    |   |-- core.py
+    |   |-- provider.py
+    |   `-- runner.py
     |-- manhastro/
     |   |-- __version__.py
     |   |-- core.py
@@ -54,6 +59,7 @@ Arquivos principais:
 
 ## Providers atuais
 
+- `geass_comics`
 - `manhastro`
 - `hanami`
 
