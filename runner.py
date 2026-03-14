@@ -3,14 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from app.Services.MD_Scrapper.Providers.manhastro.core import MANHASTRO_PROVIDER_KEY
-from app.Services.MD_Scrapper.Providers.manhastro.runner import run as run_manhastro_scraper_download
-
-ScraperRunnerType = Callable[[dict[str, Any], Callable[[int | None], bool]], None]
-
-_SCRAPER_PROVIDER_RUNNERS: dict[str, ScraperRunnerType] = {
-    MANHASTRO_PROVIDER_KEY: run_manhastro_scraper_download,
-}
+from app.Services.MD_Scrapper.registry import get_scraper_provider
 
 
 def get_scraper_job_provider(job: dict[str, Any]) -> str:
@@ -34,8 +27,8 @@ def run_scraper_download_job(job: dict[str, Any], hb: Callable[[int | None], boo
     if not provider:
         raise RuntimeError("Scraper download job sem provider.")
 
-    runner = _SCRAPER_PROVIDER_RUNNERS.get(provider)
-    if runner is None:
+    scraper_provider = get_scraper_provider(provider)
+    if scraper_provider is None:
         raise RuntimeError(f"Provider de scraper não suportado: {provider}")
 
-    runner(job, hb)
+    scraper_provider.runner(job, hb)

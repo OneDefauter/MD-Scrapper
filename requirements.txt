@@ -1,3 +1,5 @@
 cloudscraper
+playwright
 nodriver==0.48.1
 httpx
+bs4

@@ -1,3 +1,12 @@
+from .Providers.hanami.core import (
+    HANAMI_PROVIDER_KEY,
+    build_hanami_chapter_list_url,
+    fetch_hanami_chapter_manifest,
+    get_hanami_project,
+    get_hanami_project_by_url,
+    is_hanami_url,
+    search_hanami_projects,
+)
 from .Providers.manhastro.core import (
     MANHASTRO_PROVIDER_KEY,
     fetch_manhastro_chapter_manifest,
@@ -6,23 +15,48 @@ from .Providers.manhastro.core import (
     is_manhastro_url,
     search_manhastro_projects,
 )
+from .registry import (
+    ScraperProviderDefinition,
+    get_scraper_provider,
+    get_scraper_provider_compatibility,
+    list_scraper_providers,
+    resolve_scraper_provider_from_url,
+)
 from .runner import get_scraper_job_provider, run_scraper_download_job
 from .settings import (
     get_provider_settings,
+    get_scraper_provider_chapters_concurrent,
+    get_scraper_provider_chapters_concurrent_map,
+    get_scraper_provider_max_retries,
     get_scraper_worker_chapters_concurrent,
     get_scraper_worker_max_retries,
 )
 
 __all__ = [
+    "HANAMI_PROVIDER_KEY",
     "MANHASTRO_PROVIDER_KEY",
+    "ScraperProviderDefinition",
+    "build_hanami_chapter_list_url",
+    "fetch_hanami_chapter_manifest",
     "fetch_manhastro_chapter_manifest",
     "get_provider_settings",
+    "get_scraper_provider_chapters_concurrent",
+    "get_scraper_provider_chapters_concurrent_map",
+    "get_scraper_provider_max_retries",
+    "get_hanami_project",
+    "get_hanami_project_by_url",
     "get_manhastro_project",
     "get_manhastro_project_by_url",
     "get_scraper_job_provider",
+    "get_scraper_provider",
+    "get_scraper_provider_compatibility",
     "get_scraper_worker_chapters_concurrent",
     "get_scraper_worker_max_retries",
+    "is_hanami_url",
     "is_manhastro_url",
+    "list_scraper_providers",
+    "resolve_scraper_provider_from_url",
     "run_scraper_download_job",
+    "search_hanami_projects",
     "search_manhastro_projects",
 ]

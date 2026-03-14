@@ -347,7 +347,10 @@ def get_manhastro_project(manga_id: int | str) -> dict[str, Any]:
                 "title": chapter_name,
                 "label": chapter_name,
                 "published_at": chapter.get("capitulo_data"),
-                "folder_name": _sanitize_path_component(chapter_name, fallback=f"capitulo-{chapter_id}"),
+                "folder_name": _sanitize_path_component(
+                    chapter_number or chapter_name,
+                    fallback=f"capitulo-{chapter_id}",
+                ),
             }
         )
 
